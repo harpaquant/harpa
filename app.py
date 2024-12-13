@@ -51,7 +51,7 @@ st.markdown('---')
 st.sidebar.markdown('---')
 selected_calculator = st.sidebar.radio(
     "Ferramentas:",
-    ("Long Short - Teste seu Par", "Long Short - Cointegração", "Carteira Magic Formula", "Monitor de 5 Dias", "Calculadoras Black-Scholes-Merton", "Calculadora de Gregas de Opções", "Cones de Volatilidade", "PCR - Put Call Ratio", "Seguro da Carteira")
+    ("Long Short - Teste seu Par", "Long Short - Cointegração", "Carteira Magic Formula", "Monitor de 5 Dias", "Calculadoras Black-Scholes-Merton", "Calculadora de Gregas de Opções", "PCR - Put Call Ratio", "Seguro da Carteira")
 )
 
 st.sidebar.markdown('---')
