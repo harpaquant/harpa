@@ -335,6 +335,8 @@ elif selected_calculator == "Cones de Volatilidade":
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    st.write("Versão do Plotly:", plotly.__version__)
+
 
 elif selected_calculator == "Carteira Magic Formula":
     # Título do aplicativo
