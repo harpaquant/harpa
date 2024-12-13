@@ -332,11 +332,6 @@ elif selected_calculator == "Cones de Volatilidade":
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    simple_fig = go.Figure(data=[
-    go.Scatter(x=[1, 2, 3], y=[1, 4, 9], mode='markers+lines', name='Teste')
-    ])
-    st.plotly_chart(simple_fig)
-
 
 elif selected_calculator == "Carteira Magic Formula":
     # Título do aplicativo
