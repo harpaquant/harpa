@@ -313,7 +313,8 @@ elif selected_calculator == "Cones de Volatilidade":
 
     # Criar o gráfico
     fig = go.Figure(data=data, layout=layout)
-    st.plotly_chart(fig)
+    fig.update_layout(autosize=True)
+    st.plotly_chart(fig, use_container_width=True)
 
 elif selected_calculator == "Carteira Magic Formula":
     # Título do aplicativo
