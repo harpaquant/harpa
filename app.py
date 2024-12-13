@@ -283,8 +283,7 @@ elif selected_calculator == "Cones de Volatilidade":
     if acaocone == 'VALE3':
         data = yf.download('VALE3.SA', start=start, progress=False)
 
-    windows = list(map(int, windows))
-
+    
     for window in windows:
         # get a dataframe with realized volatility
         estimator = realized_vol(window=window, price_data=data)
@@ -295,6 +294,13 @@ elif selected_calculator == "Cones de Volatilidade":
         top_q.append(estimator.quantile(quantiles[1]))
         bottom_q.append(estimator.quantile(quantiles[0]))
         realized.append(estimator.iloc[-1])
+    
+    min_ = [round(v, 4) for v in min_]
+    max_ = [round(v, 4) for v in max_]
+    median = [round(v, 4) for v in median]
+    top_q = [round(v, 4) for v in top_q]
+    bottom_q = [round(v, 4) for v in bottom_q]
+    realized = [round(v, 4) for v in realized]
     
     data = [
     go.Scatter(x=windows, y=min_, mode='markers+lines', name='Min'),
