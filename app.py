@@ -267,7 +267,7 @@ elif selected_calculator == "Cones de Volatilidade":
     top_q = []
     bottom_q = []
     realized = []
-    start = "2020-01-02"
+    start = "2006-01-02"
     def realized_vol(price_data, window=30):
         log_return = (price_data["Close"] / price_data["Close"].shift(1)).apply(np.log)
         return log_return.rolling(window=window, center=False).std() * math.sqrt(252)
@@ -320,9 +320,16 @@ elif selected_calculator == "Cones de Volatilidade":
         legend=dict(x=0.5, y=1.0, bgcolor='rgba(255, 255, 255, 0)', bordercolor='rgba(255, 255, 255, 0)')
     )
 
+    
     # Criar o gráfico
     fig = go.Figure(data=data, layout=layout)
-    fig.update_layout(autosize=True)
+    fig.update_layout(
+    autosize=True,
+    margin=dict(l=40, r=40, t=40, b=40),  # Margens ajustadas
+    xaxis=dict(title='Janelas', tickvals=windows, tickformat=".0f"),
+    yaxis=dict(title='Valores', tickformat=".2f"),
+    template='plotly_dark'
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 elif selected_calculator == "Carteira Magic Formula":
