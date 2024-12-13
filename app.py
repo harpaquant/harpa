@@ -272,18 +272,21 @@ elif selected_calculator == "Cones de Volatilidade":
         log_return = (price_data["Close"] / price_data["Close"].shift(1)).apply(np.log)
         return log_return.rolling(window=window, center=False).std() * math.sqrt(252)
         return volatility.dropna()
-
+    dataabev = yf.download('ABEV3.SA', start=start, progress=False)
+    databbdc = yf.download('BBDC4.SA', start=start, progress=False)
+    databova = yf.download('BOVA11.SA', start=start, progress=False)
+    datapetr = yf.download('PETR4.SA', start=start, progress=False)
+    datavale = yf.download('VALE3.SA', start=start, progress=False)
     if acaocone == 'ABEV3':
-        data = yf.download('ABEV3.SA', start=start, progress=False)
+        data = dataabev
     if acaocone == 'BBDC4':
-        data = yf.download('BBDC4.SA', start=start, progress=False)
+        data = databbdc
     if acaocone == 'BOVA11':
-        data = yf.download('BOVA11.SA', start=start, progress=False)
+        data = databova
     if acaocone == 'PETR4':
-        data = yf.download('PETR4.SA', start=start, progress=False)
+        data = datapetr
     if acaocone == 'VALE3':
-        data = yf.download('VALE3.SA', start=start, progress=False)
-
+        data = datavale
     
     for window in windows:
         # get a dataframe with realized volatility
