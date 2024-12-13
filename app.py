@@ -267,7 +267,7 @@ elif selected_calculator == "Cones de Volatilidade":
     top_q = []
     bottom_q = []
     realized = []
-    start = "2006-01-02"
+    start = "2010-01-02"
     def realized_vol(price_data, window=30):
         log_return = (price_data["Close"] / price_data["Close"].shift(1)).apply(np.log)
         return log_return.rolling(window=window, center=False).std() * math.sqrt(252)
