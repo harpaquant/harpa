@@ -283,6 +283,8 @@ elif selected_calculator == "Cones de Volatilidade":
     if acaocone == 'VALE3':
         data = yf.download('VALE3.SA', start=start, progress=False)
 
+    windows = list(map(int, windows))
+
     for window in windows:
         # get a dataframe with realized volatility
         estimator = realized_vol(window=window, price_data=data)
@@ -305,11 +307,10 @@ elif selected_calculator == "Cones de Volatilidade":
 
     # Criar o layout do gráfico
     layout = go.Layout(
-    title=f'Cone de Volatilidade - {acaocone}',
-    xaxis=dict(title='Janelas', tickmode='array', tickvals=windows),
-    yaxis=dict(title='Valores', tickformat='.2f'),
-    legend=dict(x=0.5, y=1.0, bgcolor='rgba(255, 255, 255, 0)', bordercolor='rgba(255, 255, 255, 0)'),
-    template='plotly_dark'  # Mantém o estilo escuro
+        title=f'Cone de Volatilidade - {acaocone}',
+        xaxis=dict(title='Janelas'),
+        yaxis=dict(title='Valores'),
+        legend=dict(x=0.5, y=1.0, bgcolor='rgba(255, 255, 255, 0)', bordercolor='rgba(255, 255, 255, 0)')
     )
 
     # Criar o gráfico
