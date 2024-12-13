@@ -55,7 +55,7 @@ selected_calculator = st.sidebar.radio(
 
 st.sidebar.markdown('---')
 st.sidebar.markdown("""
-    Contato: harpaquant@gmail.com
+    Contato: vinicio.almeida@ufrn.br
     """)
 
 
