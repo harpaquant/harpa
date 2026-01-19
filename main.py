@@ -31,8 +31,12 @@ ticker = ticker_input if ticker_input.endswith(".SA") else f"{ticker_input}.SA"
 data_inicio = st.sidebar.date_input("Data Inicio", value=datetime.now() - timedelta(days=365), format="DD/MM/YYYY")
 data_fim = st.sidebar.date_input("Data Fim", value=datetime.now(), format="DD/MM/YYYY")
 
-# Download dos dados principais
-dados = yf.download(ticker, start=data_inicio, end=data_fim, progress=False)
+# Download dos dados principais com cache
+@st.cache_data(ttl=300)
+def baixar_dados(ticker, data_inicio_str, data_fim_str):
+    return yf.download(ticker, start=data_inicio_str, end=data_fim_str, progress=False)
+
+dados = baixar_dados(ticker, str(data_inicio), str(data_fim))
 
 if dados.empty:
     st.error("Nenhum dado encontrado para o ticker informado.")
@@ -52,9 +56,16 @@ if funcao == "Informacoes do Ativo":
     
     st.header(f"Informacoes: {ticker}")
     
-    # Buscar informacoes da empresa
-    info_ticker = yf.Ticker(ticker)
-    info = info_ticker.info
+    # Buscar informacoes da empresa com cache
+    @st.cache_data(ttl=3600)
+    def buscar_info_ticker(ticker):
+        try:
+            info_ticker = yf.Ticker(ticker)
+            return info_ticker.info
+        except:
+            return {}
+    
+    info = buscar_info_ticker(ticker)
     
     col1, col2, col3, col4 = st.columns(4)
     
@@ -69,29 +80,32 @@ if funcao == "Informacoes do Ativo":
     
     st.divider()
     
-    col_info1, col_info2 = st.columns(2)
-    
-    with col_info1:
-        st.subheader("Dados Cadastrais")
-        st.write(f"Nome: {info.get('longName', 'N/A')}")
-        st.write(f"Setor: {info.get('sector', 'N/A')}")
-        st.write(f"Industria: {info.get('industry', 'N/A')}")
-        st.write(f"Pais: {info.get('country', 'N/A')}")
-        st.write(f"Moeda: {info.get('currency', 'N/A')}")
-        st.write(f"Bolsa: {info.get('exchange', 'N/A')}")
-    
-    with col_info2:
-        st.subheader("Dados Fundamentalistas")
-        st.write(f"Market Cap: {info.get('marketCap', 'N/A'):,}" if isinstance(info.get('marketCap'), (int, float)) else "Market Cap: N/A")
-        st.write(f"P/L: {info.get('trailingPE', 'N/A'):.2f}" if isinstance(info.get('trailingPE'), (int, float)) else "P/L: N/A")
-        st.write(f"P/VP: {info.get('priceToBook', 'N/A'):.2f}" if isinstance(info.get('priceToBook'), (int, float)) else "P/VP: N/A")
-        st.write(f"Dividend Yield: {info.get('dividendYield', 0)*100:.2f}%" if isinstance(info.get('dividendYield'), (int, float)) else "Dividend Yield: N/A")
-        st.write(f"ROE: {info.get('returnOnEquity', 0)*100:.2f}%" if isinstance(info.get('returnOnEquity'), (int, float)) else "ROE: N/A")
-        st.write(f"Beta: {info.get('beta', 'N/A'):.2f}" if isinstance(info.get('beta'), (int, float)) else "Beta: N/A")
-    
-    st.divider()
-    st.subheader("Descricao da Empresa")
-    st.write(info.get('longBusinessSummary', 'Descricao nao disponivel.'))
+    if info:
+        col_info1, col_info2 = st.columns(2)
+        
+        with col_info1:
+            st.subheader("Dados Cadastrais")
+            st.write(f"Nome: {info.get('longName', 'N/A')}")
+            st.write(f"Setor: {info.get('sector', 'N/A')}")
+            st.write(f"Industria: {info.get('industry', 'N/A')}")
+            st.write(f"Pais: {info.get('country', 'N/A')}")
+            st.write(f"Moeda: {info.get('currency', 'N/A')}")
+            st.write(f"Bolsa: {info.get('exchange', 'N/A')}")
+        
+        with col_info2:
+            st.subheader("Dados Fundamentalistas")
+            st.write(f"Market Cap: {info.get('marketCap', 'N/A'):,}" if isinstance(info.get('marketCap'), (int, float)) else "Market Cap: N/A")
+            st.write(f"P/L: {info.get('trailingPE', 'N/A'):.2f}" if isinstance(info.get('trailingPE'), (int, float)) else "P/L: N/A")
+            st.write(f"P/VP: {info.get('priceToBook', 'N/A'):.2f}" if isinstance(info.get('priceToBook'), (int, float)) else "P/VP: N/A")
+            st.write(f"Dividend Yield: {info.get('dividendYield', 0)*100:.2f}%" if isinstance(info.get('dividendYield'), (int, float)) else "Dividend Yield: N/A")
+            st.write(f"ROE: {info.get('returnOnEquity', 0)*100:.2f}%" if isinstance(info.get('returnOnEquity'), (int, float)) else "ROE: N/A")
+            st.write(f"Beta: {info.get('beta', 'N/A'):.2f}" if isinstance(info.get('beta'), (int, float)) else "Beta: N/A")
+        
+        st.divider()
+        st.subheader("Descricao da Empresa")
+        st.write(info.get('longBusinessSummary', 'Descricao nao disponivel.'))
+    else:
+        st.warning("Nao foi possivel carregar informacoes detalhadas do ativo (limite de requisicoes). Tente novamente em alguns minutos.")
 
 
 # ============ ESTATISTICAS DESCRITIVAS ============
@@ -310,8 +324,12 @@ elif funcao == "Correlacao entre Ativos":
     lista_tickers = [t.strip() if t.strip().endswith(".SA") else f"{t.strip()}.SA" for t in tickers_comparacao.split('\n') if t.strip()]
     lista_tickers = [ticker] + lista_tickers
     
-    # Download de todos os ativos
-    dados_multi = yf.download(lista_tickers, start=data_inicio, end=data_fim, progress=False)['Close']
+    # Download de todos os ativos com cache
+    @st.cache_data(ttl=300)
+    def baixar_multiplos(tickers_tuple, data_inicio_str, data_fim_str):
+        return yf.download(list(tickers_tuple), start=data_inicio_str, end=data_fim_str, progress=False)['Close']
+    
+    dados_multi = baixar_multiplos(tuple(lista_tickers), str(data_inicio), str(data_fim))
     
     if dados_multi.empty:
         st.error("Nao foi possivel baixar os dados dos ativos.")
