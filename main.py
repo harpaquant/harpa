@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
+import requests
 from datetime import datetime, timedelta
 from scipy import stats
 import io
@@ -27,7 +28,8 @@ st.sidebar.divider()
 st.sidebar.subheader("Configuracoes de Dados")
 
 ticker_input = st.sidebar.text_input("Ticker Principal", value="PETR4")
-ticker = ticker_input if ticker_input.endswith(".SA") else f"{ticker_input}.SA"
+ticker = ticker_input.upper() if ticker_input.upper().endswith(".SA") else f"{ticker_input.upper()}.SA"
+ticker_display = ticker.replace(".SA", "")
 data_inicio = st.sidebar.date_input("Data Inicio", value=datetime.now() - timedelta(days=365), format="DD/MM/YYYY")
 data_fim = st.sidebar.date_input("Data Fim", value=datetime.now(), format="DD/MM/YYYY")
 
@@ -54,14 +56,21 @@ dados = dados.dropna()
 # ============ INFORMACOES DO ATIVO ============
 if funcao == "Informacoes do Ativo":
     
-    st.header(f"Informacoes: {ticker}")
+    st.header(f"Informacoes: {ticker_display}")
     
     # Buscar informacoes da empresa com cache
-    @st.cache_data(ttl=3600)
+    @st.cache_data(ttl=3600, show_spinner="Carregando informacoes...")
     def buscar_info_ticker(ticker):
         try:
-            info_ticker = yf.Ticker(ticker)
-            return info_ticker.info
+            session = requests.Session()
+            session.headers.update({
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            })
+            info_ticker = yf.Ticker(ticker, session=session)
+            info = info_ticker.info
+            if info and len(info) > 5:
+                return info
+            return {}
         except:
             return {}
     
@@ -105,13 +114,16 @@ if funcao == "Informacoes do Ativo":
         st.subheader("Descricao da Empresa")
         st.write(info.get('longBusinessSummary', 'Descricao nao disponivel.'))
     else:
-        st.warning("Nao foi possivel carregar informacoes detalhadas do ativo (limite de requisicoes). Tente novamente em alguns minutos.")
+        st.warning("Nao foi possivel carregar informacoes detalhadas do ativo (limite de requisicoes).")
+        if st.button("Tentar novamente"):
+            st.cache_data.clear()
+            st.rerun()
 
 
 # ============ ESTATISTICAS DESCRITIVAS ============
 elif funcao == "Estatisticas Descritivas":
     
-    st.header(f"Estatisticas Descritivas: {ticker}")
+    st.header(f"Estatisticas Descritivas: {ticker_display}")
     
     col1, col2 = st.columns(2)
     
@@ -193,7 +205,7 @@ elif funcao == "Estatisticas Descritivas":
 # ============ ANALISE DE RETORNOS ============
 elif funcao == "Analise de Retornos":
     
-    st.header(f"Analise de Retornos: {ticker}")
+    st.header(f"Analise de Retornos: {ticker_display}")
     
     st.subheader("Retornos Anualizados")
     
@@ -245,7 +257,7 @@ elif funcao == "Analise de Retornos":
 # ============ METRICAS DE RISCO ============
 elif funcao == "Metricas de Risco":
     
-    st.header(f"Metricas de Risco: {ticker}")
+    st.header(f"Metricas de Risco: {ticker_display}")
     
     st.sidebar.divider()
     st.sidebar.subheader("Parametros de Risco")
@@ -335,6 +347,9 @@ elif funcao == "Correlacao entre Ativos":
         st.error("Nao foi possivel baixar os dados dos ativos.")
         st.stop()
     
+    # Renomear colunas removendo .SA
+    dados_multi.columns = [col.replace(".SA", "") for col in dados_multi.columns]
+    
     # Retornos
     retornos_multi = dados_multi.pct_change().dropna()
     
@@ -401,7 +416,7 @@ elif funcao == "Download de Dados":
         st.download_button(
             label="Baixar CSV",
             data=csv,
-            file_name=f"{ticker}_{tipo_dado.lower().replace(' ', '_')}.csv",
+            file_name=f"{ticker_display}_{tipo_dado.lower().replace(' ', '_')}.csv",
             mime="text/csv"
         )
     else:
@@ -410,7 +425,7 @@ elif funcao == "Download de Dados":
         st.download_button(
             label="Baixar Excel",
             data=buffer.getvalue(),
-            file_name=f"{ticker}_{tipo_dado.lower().replace(' ', '_')}.xlsx",
+            file_name=f"{ticker_display}_{tipo_dado.lower().replace(' ', '_')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     
