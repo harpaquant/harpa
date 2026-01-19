@@ -58,24 +58,6 @@ if funcao == "Informacoes do Ativo":
     
     st.header(f"Informacoes: {ticker_display}")
     
-    # Buscar informacoes da empresa com cache
-    @st.cache_data(ttl=3600, show_spinner="Carregando informacoes...")
-    def buscar_info_ticker(ticker):
-        try:
-            session = requests.Session()
-            session.headers.update({
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            })
-            info_ticker = yf.Ticker(ticker, session=session)
-            info = info_ticker.info
-            if info and len(info) > 5:
-                return info
-            return {}
-        except:
-            return {}
-    
-    info = buscar_info_ticker(ticker)
-    
     col1, col2, col3, col4 = st.columns(4)
     
     preco_atual = dados['Close'].iloc[-1]
@@ -89,7 +71,61 @@ if funcao == "Informacoes do Ativo":
     
     st.divider()
     
-    if info:
+    # Buscar informacoes da empresa com cache
+    @st.cache_data(ttl=3600, show_spinner="Carregando informacoes...")
+    def buscar_info_ticker(ticker):
+        import time
+        info = {}
+        fast = {}
+        
+        for tentativa in range(3):
+            try:
+                session = requests.Session()
+                session.headers.update({
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                })
+                obj = yf.Ticker(ticker, session=session)
+                
+                # Tentar fast_info primeiro (menos restritivo)
+                try:
+                    fi = obj.fast_info
+                    fast = {
+                        'marketCap': getattr(fi, 'market_cap', None),
+                        'shares': getattr(fi, 'shares', None),
+                        'currency': getattr(fi, 'currency', None),
+                        'exchange': getattr(fi, 'exchange', None),
+                        'fiftyDayAverage': getattr(fi, 'fifty_day_average', None),
+                        'twoHundredDayAverage': getattr(fi, 'two_hundred_day_average', None),
+                        'yearHigh': getattr(fi, 'year_high', None),
+                        'yearLow': getattr(fi, 'year_low', None),
+                    }
+                except:
+                    pass
+                
+                # Tentar info completo
+                try:
+                    info = obj.info
+                    if info and len(info) > 5:
+                        return {'info': info, 'fast': fast}
+                except:
+                    pass
+                
+                if fast:
+                    return {'info': {}, 'fast': fast}
+                    
+                time.sleep(2)
+                
+            except:
+                time.sleep(2)
+                continue
+        
+        return {'info': {}, 'fast': fast}
+    
+    resultado = buscar_info_ticker(ticker)
+    info = resultado.get('info', {})
+    fast = resultado.get('fast', {})
+    
+    if info and len(info) > 5:
         col_info1, col_info2 = st.columns(2)
         
         with col_info1:
@@ -113,6 +149,26 @@ if funcao == "Informacoes do Ativo":
         st.divider()
         st.subheader("Descricao da Empresa")
         st.write(info.get('longBusinessSummary', 'Descricao nao disponivel.'))
+    
+    elif fast:
+        st.subheader("Dados Disponiveis (modo reduzido)")
+        
+        col_fast1, col_fast2 = st.columns(2)
+        
+        with col_fast1:
+            st.write(f"Moeda: {fast.get('currency', 'N/A')}")
+            st.write(f"Bolsa: {fast.get('exchange', 'N/A')}")
+            st.write(f"Market Cap: {fast.get('marketCap', 'N/A'):,.0f}" if fast.get('marketCap') else "Market Cap: N/A")
+            st.write(f"Acoes em Circulacao: {fast.get('shares', 'N/A'):,.0f}" if fast.get('shares') else "Acoes: N/A")
+        
+        with col_fast2:
+            st.write(f"Media 50 dias: R$ {fast.get('fiftyDayAverage', 'N/A'):.2f}" if fast.get('fiftyDayAverage') else "Media 50d: N/A")
+            st.write(f"Media 200 dias: R$ {fast.get('twoHundredDayAverage', 'N/A'):.2f}" if fast.get('twoHundredDayAverage') else "Media 200d: N/A")
+            st.write(f"Maxima 52 semanas: R$ {fast.get('yearHigh', 'N/A'):.2f}" if fast.get('yearHigh') else "Max 52s: N/A")
+            st.write(f"Minima 52 semanas: R$ {fast.get('yearLow', 'N/A'):.2f}" if fast.get('yearLow') else "Min 52s: N/A")
+        
+        st.info("Informacoes completas indisponiveis no momento. Exibindo dados basicos.")
+    
     else:
         st.warning("Nao foi possivel carregar informacoes detalhadas do ativo (limite de requisicoes).")
         if st.button("Tentar novamente"):
