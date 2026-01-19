@@ -10,4 +10,3 @@ openpyxl
 requests
 seaborn
 statsmodels
-fundamentus
