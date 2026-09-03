@@ -748,7 +748,15 @@ elif funcao == "Market Movers":
             formatar_tabela_pdf(pdf, 110, 90, "Menor Variacao de Volume", vol_piores, "VolumeVar")
             formatar_tabela_pdf(pdf, 10, 135, "Maior Volatilidade", vola_maiores, "Volatilidade")
             formatar_tabela_pdf(pdf, 110, 135, "Menor Volatilidade", vola_menores, "Volatilidade")
-            st.download_button("Baixar PDF", data=bytes(pdf.output()),
+            try:
+                conteudo = pdf.output(dest='S')
+            except TypeError:
+                conteudo = pdf.output()
+            if isinstance(conteudo, str):
+                conteudo = conteudo.encode('latin-1')
+            else:
+                conteudo = bytes(conteudo)
+            st.download_button("Baixar PDF", data=conteudo,
                                file_name=f"zmarketMovers_{ultimo_dia.strftime('%Y%m%d')}.pdf",
                                mime="application/pdf")
         except ImportError:
