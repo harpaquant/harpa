@@ -29,8 +29,11 @@ LOGO_ABA = next((PASTA / n for n in ("harpa.png", "harpa-clara.png", "harpa.jpg"
 st.set_page_config(page_title="Harpa Quant", layout="wide",
                    page_icon=str(LOGO_ABA) if LOGO_ABA else None)
 
-DB_COTACOES = PASTA / "zcotacoes.db"
-DB_PCR = PASTA / "zpcr_historico.db"
+PASTA_BASES = PASTA / "bases"
+PASTA_BASES.mkdir(exist_ok=True)
+
+DB_COTACOES = PASTA_BASES / "zcotacoes.db"
+DB_PCR = PASTA_BASES / "zpcr_historico.db"
 
 INICIO_ACOES = "2015-01-01"
 INICIO_INDICE = "2000-01-01"
