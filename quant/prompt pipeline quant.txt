@@ -1,0 +1,35 @@
+pipeline quant para o clube fortem
+
+pairs trading com cointegracao, reversão a media OU
+protective put com acompanhamento de regimes de markov e put call ratio
+put call parity
+SVI calls e puts com straddles e gregas
+
+vou colar os códigos dessas estratégias para vc desenhar minha sequencia de escolha - teste - implementacao
+
+
+
+
+C:\repo\harpa\
+    app.py                  painel Streamlit, só leitura e visualização
+    config.py               parâmetros do clube, limites, credenciais via ambiente
+    dados\
+        cotacoes.py         base local de ações e índices (o que já existe)
+        opcoes.py           cadeia de opções, MT5 e opcoes.net.br
+        cotas.py            série de cotas do clube, PL, enquadramento
+    estrategias\
+        pares.py            seleção, regra de entrada e saída, dimensionamento
+        paridade.py         detecção de desvio e montagem coberta
+        svi.py              calibração, resíduos e sinal de vol
+        protecao.py         regra da put, rolagem e regimes
+    risco\
+        enquadramento.py    verifica 67%, alavancagem e limites por camada
+        metricas.py         vol, V@R, expected shortfall, drawdown, betas
+    execucao\
+        ordens.py           envio, confirmação e rollback de pernas
+        diario.py           registro de todo sinal, executado ou não
+    pesquisa\
+        backtest.py         motor comum de backtest com custos
+        validacao.py        múltiplos testes, walk-forward, fora da amostra
+    bases\
+        zcotacoes.db, zopcoes.db, zpcr_historico.db, zdiario.db
