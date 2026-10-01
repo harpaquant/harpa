@@ -142,10 +142,13 @@ with aba_painel:
     falta = max(META_AUM_FASE2 - aum_total, 0)
     progresso = min(aum_total / META_AUM_FASE2, 1.0) if META_AUM_FASE2 else 0
     st.progress(progresso)
-    st.write(
-        f"AUM atual de R$ {aum_total:,.0f}".replace(",", ".")
-        + f" contra meta de R$ {META_AUM_FASE2:,.0f}".replace(",", ".")
-        + f". Faltam R$ {falta:,.0f}".replace(",", ".")
+    texto_aum = f"{aum_total:,.0f}".replace(",", ".")
+    texto_meta = f"{META_AUM_FASE2:,.0f}".replace(",", ".")
+    texto_falta = f"{falta:,.0f}".replace(",", ".")
+    st.markdown(
+        "AUM atual de R\\$ " + texto_aum
+        + " contra meta de R\\$ " + texto_meta
+        + ". Faltam R\\$ " + texto_falta
         + f" ({progresso:.0%} do caminho)."
     )
 
