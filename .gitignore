@@ -1,5 +1,5 @@
 # Database
-*.db
+bases/zcotacoes.db
 
 
 # Byte-compiled / optimized / DLL files

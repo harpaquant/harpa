@@ -19,6 +19,8 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.lines import Line2D
 from estrategias import pares as pares_db
+import config
+from estrategias import protecao as protecao_db
 
 PASTA = Path(__file__).parent
 
@@ -450,6 +452,7 @@ funcao = st.sidebar.radio("Funcao", [
     "Market Movers",
     "Alerta de Volume",
     "Pairs Trading",
+    "Protecao com Puts",
     "Put-Call Ratio",
     "Regime de Volatilidade",
     "Informacoes do Ativo",
@@ -881,6 +884,46 @@ elif funcao == "Pairs Trading":
                  "Reduza a exigencia de cobertura na barra lateral ou verifique a base de dados.")
         st.stop()
 
+    abertas = pares_db.ler_posicoes("aberta")
+    if not abertas.empty:
+        st.subheader("Posicoes abertas")
+        ultimos = quotes.iloc[-1].to_dict()
+        painel_abertas = pares_db.avaliar_abertas(ultimos, ultimo_pregao)
+
+        if not painel_abertas.empty:
+            st.dataframe(painel_abertas.style.format({
+                'z_entrada': '{:.2f}', 'z_atual': '{:.2f}', 'meia_vida': '{:.1f}',
+                'meias_vidas': '{:.1f}', 'resultado': 'R$ {:,.2f}'}),
+                use_container_width=True, hide_index=True)
+            st.caption("O z atual usa o alfa e o beta congelados na entrada. "
+                       "Os avisos nao fecham posicao nenhuma; a decisao e sua.")
+
+            com_aviso = painel_abertas[painel_abertas['avisos'] != '']
+            if not com_aviso.empty:
+                st.warning(f"{len(com_aviso)} posicoes com aviso de saida.")
+
+            st.divider()
+            st.subheader("Registrar saida")
+            opcoes = [f"{int(r['id'])}: compra {r['compra']} e vende {r['vende']} "
+                      f"(z atual {r['z_atual']:.2f})" for _, r in painel_abertas.iterrows()]
+            escolha_saida = st.selectbox("Posicao encerrada", opcoes, key="saida")
+            id_saida = int(escolha_saida.split(':')[0])
+
+            col_s1, col_s2 = st.columns(2)
+            preco_c = col_s1.number_input("Preco de venda da ponta comprada",
+                                          min_value=0.0, step=0.01, format="%.2f", key="pc")
+            preco_v = col_s2.number_input("Preco de recompra da ponta vendida",
+                                          min_value=0.0, step=0.01, format="%.2f", key="pv")
+            motivo = st.selectbox("Motivo", ["desvio fechou", "stop", "tempo",
+                                             "perda de cointegracao", "outro"])
+
+            if st.button("Registrar saida"):
+                pares_db.registrar_saida(id_saida, preco_c or None, preco_v or None, motivo)
+                st.success("Saida registrada.")
+                st.rerun()
+
+        st.divider()
+
     if st.button("Rodar a varredura de pares") or "pairs_rodou" in st.session_state:
         st.session_state["pairs_rodou"] = True
 
@@ -945,6 +988,56 @@ elif funcao == "Pairs Trading":
                            file_name=f"pares_{ultimo_pregao.replace('-', '')}.csv", mime="text/csv")
 
         st.divider()
+        st.subheader("Registrar entrada")
+
+        rotulos = []
+        for i in range(len(df)):
+            linha = df.iloc[i]
+            rotulos.append(f"{i}: compra {linha['acaoCompra']} e vende {linha['acaoVende']} "
+                           f"(Z {linha['Z']:.2f}, meia-vida {linha['OU']:.1f})")
+
+        escolha = st.selectbox("Par montado", rotulos)
+        indice = int(escolha.split(':')[0])
+        par = df.iloc[indice]
+
+        col_q1, col_q2, col_p1, col_p2 = st.columns(4)
+        qtde_compra = col_q1.number_input(f"Quantidade {par['acaoCompra']}",
+                                          min_value=0, step=100, value=0)
+        qtde_vende = col_q2.number_input(f"Quantidade {par['acaoVende']}",
+                                         min_value=0, step=100, value=0)
+        preco_compra = col_p1.number_input(f"Preco executado {par['acaoCompra']}",
+                                           min_value=0.0, step=0.01, format="%.2f")
+        preco_vende = col_p2.number_input(f"Preco executado {par['acaoVende']}",
+                                          min_value=0.0, step=0.01, format="%.2f")
+        nota = st.text_input("Observacao", value="")
+
+        if qtde_compra > 0 and qtde_vende > 0:
+            financeiro_compra = qtde_compra * (preco_compra or par['Preco1'])
+            financeiro_vende = qtde_vende * (preco_vende or par['Preco2'])
+            st.caption(f"Financeiro: R$ {financeiro_compra:,.2f} comprados e "
+                       f"R$ {financeiro_vende:,.2f} vendidos. Razao entre as pontas: "
+                       f"{financeiro_compra / financeiro_vende:.3f}. "
+                       f"Beta da regressao: {par['Beta']:.3f}.".replace(',', '.'))
+
+        if st.button("Registrar este par como aberto"):
+            if qtde_compra <= 0 or qtde_vende <= 0:
+                st.error("Informe as quantidades das duas pontas.")
+            else:
+                identificador = pares_db.registrar_entrada(
+                    par, qtde_compra=qtde_compra, qtde_vende=qtde_vende,
+                    preco_compra_exec=preco_compra or None,
+                    preco_vende_exec=preco_vende or None,
+                    observacao=nota or None)
+                st.success(f"Par registrado com o numero {identificador}. "
+                           f"Alfa, beta e desvio congelados na varredura de "
+                           f"{precos.index[-1].strftime('%d/%m/%Y')}.")
+
+        abertas = pares_db.ler_posicoes("aberta")
+        if not abertas.empty:
+            st.caption(f"{len(abertas)} posicoes abertas registradas. "
+                       f"O limite e de {config.PARES_MAXIMO_SIMULTANEO} pares simultaneos.")
+
+        st.divider()
         st.subheader("Concentracao por ativo")
         col_compra, col_venda = st.columns(2)
         with col_compra:
@@ -1007,6 +1100,147 @@ elif funcao == "Pairs Trading":
                                file_name=f"zpairsTrading_{ultimo_pregao.replace('-', '')}.pdf",
                                mime="application/pdf")
 
+
+# ============================================================================
+# PROTECAO COM PUTS
+# ============================================================================
+
+elif funcao == "Protecao com Puts":
+
+    st.title("Protecao com Puts")
+
+    st.sidebar.subheader("Parametros")
+    pl_clube = st.sidebar.number_input("PL do clube (R$)", min_value=0.0,
+                                       step=10000.0, value=800000.0, format="%.2f")
+    subjacente_put = st.sidebar.text_input("Subjacente", value=config.SUBJACENTE_OPCOES).upper()
+
+    # --- sinal de regime -----------------------------------------------
+    regime_alto = False
+    try:
+        indice_prot = ler_ativo(ibov, INICIO_INDICE, chave_do_dia, marca)
+        painel_prot, transicao_prot, medias_prot = rodar_markov(indice_prot['Close'], 30, 2)
+        regime_alto = int(painel_prot['regime'].iloc[-1]) == 1
+        vol_corrente = painel_prot['volatilidade'].iloc[-1] * 100
+        persistencia = transicao_prot[1, 1] * 100 if regime_alto else transicao_prot[0, 0] * 100
+    except Exception as erro:
+        vol_corrente = None
+        persistencia = None
+        st.warning(f"Nao foi possivel estimar o regime: {erro}")
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Regime de volatilidade", "Alto" if regime_alto else "Baixo")
+    if vol_corrente is not None:
+        col2.metric("Volatilidade movel 30 dias", f"{vol_corrente:.2f}%")
+        col3.metric("Persistencia do estado", f"{persistencia:.1f}%")
+
+    st.caption("O regime mostrado aqui e estimado sobre a serie inteira. O estudo em "
+               "pesquisa/sinais_protecao.py mostrou que, estimado sem informacao futura, "
+               "esse sinal antecipa pouco as quedas. Por isso ele apenas reforca a "
+               "protecao, sem substituir a compra mensal.")
+
+    st.divider()
+
+    # --- orcamento -------------------------------------------------------
+    st.subheader("Orcamento do ano")
+    situacao = protecao_db.orcamento(pl_clube)
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Teto anual", f"R$ {situacao['teto_anual']:,.0f}".replace(',', '.'))
+    col2.metric("Gasto no ano", f"R$ {situacao['gasto_total']:,.0f}".replace(',', '.'))
+    col3.metric("Reserva disponivel", f"R$ {situacao['reserva_disponivel']:,.0f}".replace(',', '.'))
+    col4.metric("Reforcos restantes", situacao['reforcos_restantes'])
+
+    consumido = situacao['gasto_total'] / situacao['teto_anual'] if situacao['teto_anual'] else 0
+    st.progress(min(consumido, 1.0),
+                text=f"{consumido * 100:.0f} por cento do orcamento anual consumido")
+
+    st.divider()
+
+    # --- sugestoes --------------------------------------------------------
+    st.subheader("O que comprar")
+
+    try:
+        vencimentos_put = baixar_vencimentos(subjacente_put)
+    except Exception:
+        vencimentos_put = []
+
+    spot = None
+    serie_sub = ler_ativo(subjacente_put + ".SA", (date.today() - timedelta(days=30)).isoformat(),
+                          chave_do_dia, marca)
+    if not serie_sub.empty:
+        spot = float(serie_sub['Close'].iloc[-1])
+    spot = st.number_input("Preco a vista do subjacente", min_value=0.0, step=0.01,
+                           value=spot or 0.0, format="%.2f")
+
+    if spot > 0:
+        mensal = protecao_db.sugerir(pl_clube, spot, "mensal")
+        reforco = protecao_db.sugerir(pl_clube, spot, "reforco", regime_alto)
+
+        col_m, col_r = st.columns(2)
+        with col_m:
+            st.write("**Piso mensal**")
+            st.write(f"Premio disponivel: R$ {mensal['premio_disponivel']:,.2f}".replace(',', '.'))
+            st.write(f"Strike alvo: R$ {mensal['strike_alvo']:.2f} "
+                     f"({mensal['moneyness'] * 100:.0f} por cento abaixo do spot)")
+        with col_r:
+            st.write("**Reforco**")
+            if reforco['liberado']:
+                st.write(f"Premio disponivel: R$ {reforco['premio_disponivel']:,.2f}".replace(',', '.'))
+                st.write(f"Strike alvo: R$ {reforco['strike_alvo']:.2f} "
+                         f"({reforco['moneyness'] * 100:.0f} por cento abaixo do spot)")
+            else:
+                st.write(f"Nao liberado: {reforco['motivo']}")
+
+    st.divider()
+
+    # --- registro ---------------------------------------------------------
+    st.subheader("Registrar compra")
+
+    tipo_compra = st.radio("Tipo", ["mensal", "reforco"], horizontal=True)
+    col_a, col_b, col_c = st.columns(3)
+    serie_put = col_a.text_input("Serie da put", value="")
+    if vencimentos_put:
+        venc_put = col_b.selectbox("Vencimento", vencimentos_put)
+    else:
+        venc_put = col_b.text_input("Vencimento (AAAA-MM-DD)", value="")
+    strike_put = col_c.number_input("Strike", min_value=0.0, step=0.01, format="%.2f")
+
+    col_d, col_e = st.columns(2)
+    qtde_put = col_d.number_input("Quantidade", min_value=0, step=100, value=0)
+    premio_put = col_e.number_input("Premio unitario", min_value=0.0, step=0.01, format="%.2f")
+
+    if qtde_put > 0 and premio_put > 0:
+        total_put = qtde_put * premio_put
+        st.caption(f"Premio total: R$ {total_put:,.2f}, equivalente a "
+                   f"{total_put / pl_clube * 100:.3f} por cento do PL.".replace(',', '.'))
+
+    nota_put = st.text_input("Observacao", value="", key="nota_put")
+
+    if st.button("Registrar compra de put"):
+        if qtde_put <= 0 or premio_put <= 0 or strike_put <= 0:
+            st.error("Informe strike, quantidade e premio.")
+        else:
+            motivo_put = "regime de alta volatilidade" if tipo_compra == "reforco" else "piso mensal"
+            identificador = protecao_db.registrar(
+                tipo_compra, serie_put or None, venc_put or None, strike_put, spot,
+                qtde_put, premio_put, pl_clube, motivo_put, nota_put or None)
+            st.success(f"Compra registrada com o numero {identificador}.")
+            st.rerun()
+
+    st.divider()
+
+    # --- historico ---------------------------------------------------------
+    st.subheader("Historico do ano")
+    historico_put = protecao_db.ler(date.today().year)
+    if historico_put.empty:
+        st.info("Nenhuma compra registrada neste ano.")
+    else:
+        colunas_put = ['data', 'tipo', 'serie', 'vencimento', 'strike', 'spot',
+                       'moneyness', 'quantidade', 'premio_unitario', 'premio_total']
+        st.dataframe(historico_put[colunas_put].style.format({
+            'strike': 'R$ {:.2f}', 'spot': 'R$ {:.2f}', 'moneyness': '{:.1%}',
+            'premio_unitario': 'R$ {:.2f}', 'premio_total': 'R$ {:,.2f}'}),
+            use_container_width=True, hide_index=True)
 
 # ============================================================================
 # PUT-CALL RATIO
