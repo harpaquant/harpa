@@ -18,6 +18,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.lines import Line2D
+from estrategias import pares as pares_db
 
 PASTA = Path(__file__).parent
 
@@ -293,7 +294,7 @@ def ler_controle(marca):
 
 def ornstein_uhlenbeck(params, serie):
     theta, mu, sigma = params
-    dt = 1.0 / 252
+    dt = 1.0
     diferenca = np.diff(serie)
     residuo = diferenca - theta * (mu - serie[:-1]) * dt
     return np.sum(residuo ** 2)
@@ -848,6 +849,7 @@ elif funcao == "Pairs Trading":
     corte_pbeta = st.sidebar.number_input("p-valor maximo do beta", value=0.01, step=0.01, format="%.2f")
     cobertura_minima = st.sidebar.slider("Cobertura minima do ativo na janela", 0.50, 1.00, 0.95, 0.05)
     filtrar_mediana = st.sidebar.checkbox("Filtrar pela mediana da dependencia de cauda", value=True)
+    dias_persistencia = st.sidebar.slider("Pregoes considerados na persistencia", 2, 10, 3)
 
     inicio_leitura = (date.today() - timedelta(days=dias_janela)).isoformat()
     precos, volumes = ler_painel(tuple(ativos_yf), inicio_leitura, chave_do_dia, marca)
@@ -860,10 +862,11 @@ elif funcao == "Pairs Trading":
     aproveitados = cobertura[cobertura >= cobertura_minima].index.tolist()
     quotes = precos[aproveitados].ffill().dropna(axis=1)
     quotes.columns = [c.replace('.SA', '') for c in quotes.columns]
+    ultimo_pregao = precos.index[-1].strftime('%Y-%m-%d')
 
-    st.write(f"Janela de {precos.shape[0]} pregoes. {quotes.shape[1]} ativos aproveitados dos "
-             f"{precos.shape[1]} presentes na base, exigindo pelo menos "
-             f"{cobertura_minima * 100:.0f} por cento de dias negociados. "
+    st.write(f"Janela de {precos.shape[0]} pregoes ate {precos.index[-1].strftime('%d/%m/%Y')}. "
+             f"{quotes.shape[1]} ativos aproveitados dos {precos.shape[1]} presentes na base, "
+             f"exigindo pelo menos {cobertura_minima * 100:.0f} por cento de dias negociados. "
              "A primeira execucao do dia leva alguns segundos; depois o resultado fica em cache.")
 
     descartados = cobertura[cobertura < cobertura_minima]
@@ -890,6 +893,11 @@ elif funcao == "Pairs Trading":
         col3.metric("Pares cointegrados", diagnostico['cointegrados'])
         col4.metric("Pares abertos e validos", diagnostico['validos'])
 
+        esperado_acaso = diagnostico['total_pares'] * corte_residuo
+        st.caption(f"Dos {diagnostico['total_pares']} pares possiveis, testados ao nivel de "
+                   f"{corte_residuo * 100:.0f} por cento, cerca de {esperado_acaso:.0f} apareceriam "
+                   f"cointegrados por acaso. Foram encontrados {diagnostico['cointegrados']}.")
+
         if resultado.empty:
             st.warning("Nenhum par sobreviveu aos filtros nesta janela.")
             st.stop()
@@ -901,22 +909,40 @@ elif funcao == "Pairs Trading":
 
         df['acaoVende'] = np.where(df['DesvioAb'] < 0, df['Acao2'], df['Acao1'])
         df['acaoCompra'] = np.where(df['DesvioAb'] < 0, df['Acao1'], df['Acao2'])
+        df['Z'] = df['DesvioAb'] / df['DesvioP']
         df = df.sort_values(by=['TailDep_Avg', 'OU'], ascending=[False, True])
+
+        gravadas = pares_db.gravar(df, diagnostico, ultimo_pregao)
+        st.caption(f"Varredura do pregao de {precos.index[-1].strftime('%d/%m/%Y')} gravada: "
+                   f"{gravadas} pares no banco.")
 
         st.write(f"{len(df)} pares selecionados, com dependencia de cauda media de "
                  f"{df['TailDep_Avg'].mean():.4f} e meia-vida mediana de {df['OU'].median():.1f} dias.")
 
         st.divider()
         st.subheader("Pares selecionados")
+
+        historico = pares_db.persistencia(dias=dias_persistencia)
+        if not historico.empty:
+            df = df.merge(historico, left_on=['Acao1', 'Acao2'],
+                          right_on=['acao1', 'acao2'], how='left')
+            df = df.drop(columns=['acao1', 'acao2'])
+            df['dias_na_lista'] = df['dias_na_lista'].fillna(1).astype(int)
+        else:
+            df['dias_na_lista'] = 1
+
         colunas_visiveis = ['Acao1', 'Acao2', 'acaoCompra', 'acaoVende', 'Beta',
-                            'DesvioAb', 'DesvioP', 'OU', 'TailDep_Avg', 'PPR']
+                            'Z', 'DesvioAb', 'DesvioP', 'OU', 'TailDep_Avg', 'PPR',
+                            'dias_na_lista']
         st.dataframe(df[colunas_visiveis].style.format({
-            'Beta': '{:.4f}', 'DesvioAb': '{:.4f}', 'DesvioP': '{:.4f}',
+            'Beta': '{:.4f}', 'Z': '{:.2f}', 'DesvioAb': '{:.4f}', 'DesvioP': '{:.4f}',
             'OU': '{:.1f}', 'TailDep_Avg': '{:.4f}', 'PPR': '{:.5f}'}),
             use_container_width=True, hide_index=True)
+        st.caption(f"Z e o desvio em desvios-padrao do residuo. A coluna dias_na_lista conta em "
+                   f"quantos dos ultimos {dias_persistencia} pregoes gravados o par apareceu.")
 
         st.download_button("Baixar pares em CSV", data=df.to_csv(index=False).encode('utf-8'),
-                           file_name=f"pares_{date.today().strftime('%Y%m%d')}.csv", mime="text/csv")
+                           file_name=f"pares_{ultimo_pregao.replace('-', '')}.csv", mime="text/csv")
 
         st.divider()
         st.subheader("Concentracao por ativo")
@@ -951,8 +977,9 @@ elif funcao == "Pairs Trading":
             eixo.grid(False)
             st.pyplot(figura)
             st.caption(f"Vender {linha['acaoVende']} e comprar {linha['acaoCompra']}. "
-                       f"Desvio de {linha['DesvioAb']:.4f} contra um desvio padrao de {linha['DesvioP']:.4f}. "
-                       f"Meia-vida estimada de {linha['OU']:.1f} dias.")
+                       f"Z de {linha['Z']:.2f} e meia-vida estimada de {linha['OU']:.1f} dias. "
+                       f"Apareceu em {int(linha['dias_na_lista'])} dos ultimos "
+                       f"{dias_persistencia} pregoes gravados.")
             plt.close(figura)
 
         st.divider()
@@ -977,7 +1004,7 @@ elif funcao == "Pairs Trading":
                     pdf_pares.savefig(figura)
                     plt.close(figura)
             st.download_button("Baixar PDF dos pares", data=buffer_pdf.getvalue(),
-                               file_name=f"zpairsTrading_{date.today().strftime('%Y%m%d')}.pdf",
+                               file_name=f"zpairsTrading_{ultimo_pregao.replace('-', '')}.pdf",
                                mime="application/pdf")
 
 

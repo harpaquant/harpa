@@ -10,6 +10,7 @@ DB_COTACOES = PASTA_BASES / "zcotacoes.db"
 DB_PCR = PASTA_BASES / "zpcr_historico.db"
 DB_OPCOES = PASTA_BASES / "zopcoes.db"
 DB_DIARIO = PASTA_BASES / "zdiario.db"
+DB_PARES = PASTA_BASES / "zpares.db"
 
 # --- credenciais, lidas do ambiente ---------------------------------
 MT5_CONTA = os.getenv("MT5_CONTA")
